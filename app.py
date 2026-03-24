@@ -1,8 +1,10 @@
 import os
+import re
 import sqlite3
 import json
 import urllib.request
 import urllib.parse
+import urllib.error
 import xml.etree.ElementTree as ET
 import sys
 import io
@@ -24,33 +26,36 @@ def init_db():
     conn = get_db()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS challenges (
-            id         INTEGER PRIMARY KEY,
-            title      TEXT,
-            topic      TEXT,
-            difficulty TEXT,
-            description TEXT,
+            id           INTEGER PRIMARY KEY,
+            title        TEXT,
+            topic        TEXT,
+            difficulty   TEXT,
+            description  TEXT,
             starter_code TEXT,
-            done       INTEGER DEFAULT 0,
-            bookmarked INTEGER DEFAULT 0
+            done         INTEGER DEFAULT 0,
+            bookmarked   INTEGER DEFAULT 0
         );
-
         CREATE TABLE IF NOT EXISTS notes (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             challenge_id INTEGER UNIQUE,
             content      TEXT,
             updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-
         CREATE TABLE IF NOT EXISTS news_cache (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             content    TEXT,
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-
         CREATE TABLE IF NOT EXISTS user_solutions (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             challenge_id INTEGER UNIQUE,
             code         TEXT,
+            updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS hint_cache (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            challenge_id INTEGER UNIQUE,
+            content      TEXT,
             updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
         );
     """)
@@ -103,38 +108,31 @@ def init_db():
             challenges
         )
 
-    # Sample SQL tables
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS employees (
-            id         INTEGER PRIMARY KEY,
-            name       TEXT,
-            department TEXT,
-            dept_id    INTEGER,
-            salary     REAL,
-            age        INTEGER
+            id INTEGER PRIMARY KEY, name TEXT, department TEXT,
+            dept_id INTEGER, salary REAL, age INTEGER
         );
         CREATE TABLE IF NOT EXISTS departments (
-            id        INTEGER PRIMARY KEY,
-            dept_name TEXT,
-            location  TEXT
+            id INTEGER PRIMARY KEY, dept_name TEXT, location TEXT
         );
     """)
 
     if conn.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == 0:
         conn.executemany("INSERT INTO employees VALUES(?,?,?,?,?,?)", [
-            (1, 'Alice',   'Engineering', 1, 95000, 30),
-            (2, 'Bob',     'Marketing',   2, 62000, 25),
-            (3, 'Charlie', 'Engineering', 1, 88000, 35),
-            (4, 'Diana',   'HR',          3, 55000, 28),
-            (5, 'Eve',     'Engineering', 1, 102000, 32),
-            (6, 'Frank',   'Marketing',   2, 58000, 27),
-            (7, 'Grace',   'HR',          3, 51000, 24),
-            (8, 'Henry',   'Engineering', 1, 78000, 29),
+            (1,'Alice','Engineering',1,95000,30),
+            (2,'Bob','Marketing',2,62000,25),
+            (3,'Charlie','Engineering',1,88000,35),
+            (4,'Diana','HR',3,55000,28),
+            (5,'Eve','Engineering',1,102000,32),
+            (6,'Frank','Marketing',2,58000,27),
+            (7,'Grace','HR',3,51000,24),
+            (8,'Henry','Engineering',1,78000,29),
         ])
         conn.executemany("INSERT INTO departments VALUES(?,?,?)", [
-            (1, 'Engineering', 'New York'),
-            (2, 'Marketing',   'Chicago'),
-            (3, 'HR',          'Austin'),
+            (1,'Engineering','New York'),
+            (2,'Marketing','Chicago'),
+            (3,'HR','Austin'),
         ])
 
     conn.commit()
@@ -151,10 +149,11 @@ def index():
 def get_challenges():
     conn = get_db()
     rows = conn.execute("""
-        SELECT c.*, n.content as note, s.code as saved_code
+        SELECT c.*, n.content as note, s.code as saved_code, h.content as cached_hint
         FROM challenges c
         LEFT JOIN notes n ON c.id = n.challenge_id
         LEFT JOIN user_solutions s ON c.id = s.challenge_id
+        LEFT JOIN hint_cache h ON c.id = h.challenge_id
     """).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
@@ -206,7 +205,7 @@ def save_solution(cid):
     return jsonify({"ok": True})
 
 
-# ── Python code runner ─────────────────────────────────────────────
+# ── Python runner ──────────────────────────────────────────────────
 @app.route("/api/run", methods=["POST"])
 def run_code():
     code = request.json.get("code", "")
@@ -233,7 +232,7 @@ def run_sql():
     try:
         conn = sqlite3.connect(DB)
         conn.row_factory = sqlite3.Row
-        cur = conn.execute(query)
+        cur  = conn.execute(query)
         rows = cur.fetchall()
         cols = [d[0] for d in cur.description] if cur.description else []
         conn.close()
@@ -242,87 +241,190 @@ def run_sql():
         return jsonify({"error": str(e)})
 
 
-# ── Hugging Face hint ──────────────────────────────────────────────
+# ── Built-in hints fallback ────────────────────────────────────────
+def builtin_hint(ch):
+    hints = {
+        "Data Wrangling": [
+            "Use df.fillna(df['col'].mean()) to fill missing numeric values with the mean.",
+            "Use df.drop_duplicates() to remove duplicate rows from your DataFrame.",
+            "Use df['col'].str.strip() to remove leading/trailing whitespace from strings.",
+        ],
+        "ML Fundamentals": [
+            "Always split your data with train_test_split() before fitting any model.",
+            "Use .fit() on training data only — never on the full dataset.",
+            "Use accuracy_score(y_test, y_pred) to evaluate classification models.",
+        ],
+        "SQL": [
+            "Use WHERE to filter rows — it runs before GROUP BY.",
+            "Use HAVING to filter groups after GROUP BY (e.g. HAVING COUNT(*) > 1).",
+            "Use JOIN ... ON table1.id = table2.fk_id to connect two tables.",
+        ]
+    }
+    topic_hints = hints.get(ch["topic"], [
+        "Break the problem into smaller steps.",
+        "Print intermediate results to understand what your code is doing.",
+        "Re-read the problem description carefully before writing code.",
+    ])
+    return "\n".join(f"• {h}" for h in topic_hints)
+
+
+# ── AI Hint ────────────────────────────────────────────────────────
 @app.route("/api/hint/<int:cid>")
 def get_hint(cid):
+    conn = get_db()
+    ch = conn.execute("SELECT * FROM challenges WHERE id=?", (cid,)).fetchone()
+    cached = conn.execute(
+        "SELECT content FROM hint_cache WHERE challenge_id=?", (cid,)
+    ).fetchone()
+    conn.close()
+
+    # Return cached hint instantly
+    if cached:
+        return jsonify({"hint": cached["content"], "source": "cache"})
+
+    # Try HuggingFace API
     key = os.getenv("HF_API_KEY")
-    if not key:
-        return jsonify({"error": "No HF_API_KEY found in .env"}), 400
-    try:
-        conn = get_db()
-        ch = conn.execute("SELECT * FROM challenges WHERE id=?", (cid,)).fetchone()
-        conn.close()
-        prompt = (
-            f"I am a beginner in Data Science working on this challenge:\n"
-            f"Title: {ch['title']}\nDescription: {ch['description']}\n\n"
-            f"Give me 3 short beginner-friendly hints (not the full solution). "
-            f"Use simple language and bullet points."
-        )
-        data = json.dumps({
-            "inputs": prompt,
-            "parameters": {"max_new_tokens": 300, "temperature": 0.7}
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
-            data=data,
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read().decode())
-        if isinstance(result, list) and result:
-            text = result[0].get("generated_text", "")
-            if prompt in text:
-                text = text.replace(prompt, "").strip()
-            return jsonify({"hint": text})
-        return jsonify({"error": "No response from model"}), 500
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    if key:
+        try:
+            prompt = (
+                f"I am a beginner in Data Science working on this challenge:\n"
+                f"Title: {ch['title']}\nDescription: {ch['description']}\n\n"
+                f"Give me exactly 3 short beginner-friendly hints (not the full solution). "
+                f"Format as bullet points starting with •. Be concise."
+            )
+            data = json.dumps({
+                "inputs": prompt,
+                "parameters": {
+                    "max_new_tokens": 250,
+                    "temperature": 0.5,
+                    "return_full_text": False
+                }
+            }).encode("utf-8")
+
+            req = urllib.request.Request(
+                "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+                data=data,
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                result = json.loads(resp.read().decode())
+
+            if isinstance(result, list) and result:
+                hint_text = result[0].get("generated_text", "").strip()
+                if hint_text:
+                    conn = get_db()
+                    conn.execute("""
+                        INSERT INTO hint_cache(challenge_id, content) VALUES(?,?)
+                        ON CONFLICT(challenge_id) DO UPDATE SET content=excluded.content
+                    """, (cid, hint_text))
+                    conn.commit()
+                    conn.close()
+                    return jsonify({"hint": hint_text, "source": "ai"})
+        except Exception as e:
+            print(f"HuggingFace hint failed: {e}")
+
+    # Fallback to built-in hints
+    hint_text = builtin_hint(ch)
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO hint_cache(challenge_id, content) VALUES(?,?)
+        ON CONFLICT(challenge_id) DO UPDATE SET content=excluded.content
+    """, (cid, hint_text))
+    conn.commit()
+    conn.close()
+    return jsonify({"hint": hint_text, "source": "builtin"})
 
 
-# ── arXiv news ─────────────────────────────────────────────────────
+# ── News — RSS with fallback ───────────────────────────────────────
 @app.route("/api/news")
 def get_news():
+    sources = [
+        "https://export.arxiv.org/rss/cs.LG",
+        "https://export.arxiv.org/rss/cs.AI",
+    ]
+
+    for source_url in sources:
+        try:
+            req = urllib.request.Request(
+                source_url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+                    "Accept": "text/html,application/xhtml+xml,application/xml,*/*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                }
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                xml_data = resp.read().decode("utf-8", errors="ignore")
+
+            root  = ET.fromstring(xml_data)
+            items = root.findall(".//item")
+            news  = []
+
+            for item in items[:8]:
+                title_el   = item.find("title")
+                link_el    = item.find("link")
+                desc_el    = item.find("description")
+                pubdate_el = item.find("pubDate")
+
+                if title_el is None:
+                    continue
+
+                title   = title_el.text.strip() if title_el.text else "No title"
+                link    = link_el.text.strip() if link_el is not None and link_el.text else ""
+                summary = ""
+                if desc_el is not None and desc_el.text:
+                    summary = re.sub(r'<[^>]+>', '', desc_el.text).strip()[:200] + "..."
+                date = pubdate_el.text[:16] if pubdate_el is not None and pubdate_el.text else ""
+
+                tl = title.lower()
+                if any(w in tl for w in ["language model","llm","gpt","transformer","generative","neural"]):
+                    tag = "AI News"
+                elif any(w in tl for w in ["survey","review","benchmark","analysis"]):
+                    tag = "Research"
+                elif any(w in tl for w in ["efficient","framework","tool","library","system"]):
+                    tag = "Tools"
+                else:
+                    tag = "Research"
+
+                news.append({"title": title, "summary": summary, "tag": tag, "date": date, "link": link})
+
+            if news:
+                conn = get_db()
+                conn.execute("DELETE FROM news_cache")
+                conn.execute("INSERT INTO news_cache(content) VALUES(?)", (json.dumps(news),))
+                conn.commit()
+                conn.close()
+                return jsonify(news)
+
+        except Exception as e:
+            print(f"RSS source {source_url} failed: {e}")
+            continue
+
+    # Try cached news
     try:
-        query = urllib.parse.quote("data science machine learning artificial intelligence")
-        url = (
-            f"https://export.arxiv.org/api/query?"
-            f"search_query=all:{query}"
-            f"&sortBy=submittedDate&sortOrder=descending&max_results=6"
-        )
-        req = urllib.request.Request(url, headers={"User-Agent": "ds-upskill-app/1.0"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            xml_data = resp.read().decode("utf-8")
-        ns   = {"atom": "http://www.w3.org/2005/Atom"}
-        root = ET.fromstring(xml_data)
-        news = []
-        for entry in root.findall("atom:entry", ns):
-            title   = entry.find("atom:title",   ns).text.strip().replace("\n", " ")
-            summary = entry.find("atom:summary", ns).text.strip().replace("\n", " ")[:200] + "..."
-            date    = entry.find("atom:published",ns).text[:10]
-            link    = entry.find("atom:id",      ns).text.strip()
-            tl      = title.lower()
-            if any(w in tl for w in ["language model","llm","gpt","transformer","generative"]):
-                tag = "AI News"
-            elif any(w in tl for w in ["survey","review","benchmark"]):
-                tag = "Research"
-            elif any(w in tl for w in ["efficient","framework","tool","library"]):
-                tag = "Tools"
-            else:
-                tag = "Research"
-            news.append({"title": title, "summary": summary, "tag": tag, "date": date, "link": link})
         conn = get_db()
-        conn.execute("DELETE FROM news_cache")
-        conn.execute("INSERT INTO news_cache(content) VALUES(?)", (json.dumps(news),))
-        conn.commit()
-        conn.close()
-        return jsonify(news)
-    except Exception as e:
-        conn = get_db()
-        cached = conn.execute("SELECT content FROM news_cache ORDER BY fetched_at DESC LIMIT 1").fetchone()
+        cached = conn.execute(
+            "SELECT content FROM news_cache ORDER BY fetched_at DESC LIMIT 1"
+        ).fetchone()
         conn.close()
         if cached:
             return jsonify(json.loads(cached["content"]))
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        pass
+
+    # Hardcoded fallback — always works offline
+    fallback = [
+        {"title": "Attention Is All You Need — Transformer Architecture", "summary": "The seminal paper introducing the Transformer model which revolutionized NLP and deep learning.", "tag": "Research", "date": "2017-06-12", "link": "https://arxiv.org/abs/1706.03762"},
+        {"title": "BERT: Pre-training of Deep Bidirectional Transformers", "summary": "Google's BERT model for language understanding using bidirectional training of Transformers.", "tag": "AI News", "date": "2018-10-11", "link": "https://arxiv.org/abs/1810.04805"},
+        {"title": "XGBoost: A Scalable Tree Boosting System", "summary": "XGBoost is a highly efficient gradient boosting framework widely used in data science competitions.", "tag": "Tools", "date": "2016-03-09", "link": "https://arxiv.org/abs/1603.02754"},
+        {"title": "Random Forests — Ensemble Learning Method", "summary": "Leo Breiman's random forests algorithm combining multiple decision trees for better accuracy.", "tag": "Research", "date": "2001-10-01", "link": "https://arxiv.org/abs/1106.0257"},
+        {"title": "Deep Residual Learning for Image Recognition", "summary": "Microsoft's ResNet paper introducing skip connections to train very deep neural networks.", "tag": "AI News", "date": "2015-12-10", "link": "https://arxiv.org/abs/1512.03385"},
+        {"title": "A Survey on Transfer Learning in Deep Learning", "summary": "Comprehensive survey covering transfer learning methods, applications and open research problems.", "tag": "Research", "date": "2019-08-01", "link": "https://arxiv.org/abs/1911.02685"},
+    ]
+    return jsonify(fallback)
 
 
 if __name__ == "__main__":
