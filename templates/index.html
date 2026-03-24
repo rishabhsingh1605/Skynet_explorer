@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SkyNet</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css"/>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Share Tech Mono', monospace; background: #0a0a0a; color: #e0e0e0; }
+
+/* ── Nav ── */
+.nav {
+  height: 50px;
+  background: #0d0d0d;
+  border-bottom: 1px solid #1a1a1a;
+  display: flex; align-items: center;
+  padding: 0 20px; gap: 16px;
+  position: relative;
+}
+.nav::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, #cc0000, #ff3300, #cc0000, transparent);
+}
+.nav-logo {
+  display: flex; flex-direction: column; line-height: 1;
+}
+.nav-logo-text {
+  font-family: 'Orbitron', monospace;
+  font-size: 20px; font-weight: 900;
+  letter-spacing: 6px;
+  color: #ff2200;
+  text-shadow: 0 0 10px rgba(255,34,0,0.5);
+  text-transform: uppercase;
+}
+.nav-logo-sub {
+  font-size: 8px; letter-spacing: 3px;
+  color: #441100; text-transform: uppercase;
+  margin-top: 2px;
+}
+.nav-divider { width: 1px; height: 24px; background: #1a1a1a; margin: 0 4px; }
+.nav-tabs { display: flex; gap: 4px; }
+.nav-tab {
+  font-size: 11px; letter-spacing: 1px;
+  padding: 5px 14px; border-radius: 3px;
+  border: 1px solid transparent;
+  background: transparent; color: #444;
+  cursor: pointer; text-transform: uppercase;
+  transition: all .15s;
+}
+.nav-tab.active { border-color: #cc0000; color: #ff4422; background: rgba(200,0,0,0.08); }
+.nav-tab:hover { color: #cc4422; }
+.nav-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.stat-pill {
+  font-size: 11px; letter-spacing: 1px;
+  background: #111; border: 1px solid #1e1e1e;
+  border-radius: 3px; padding: 3px 10px; color: #444;
+}
+.stat-pill span { color: #ff2200; font-weight: 700; }
+
+/* ── List view ── */
+#list-view { display: flex; height: calc(100vh - 50px); }
+.sidebar {
+  width: 290px; background: #080808;
+  border-right: 1px solid #161616;
+  overflow-y: auto; flex-shrink: 0;
+}
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-thumb { background: #2a0000; }
+.sidebar-header {
+  padding: 10px 12px; border-bottom: 1px solid #161616;
+  display: flex; gap: 8px; background: #0a0a0a;
+}
+.filter-sel {
+  font-size: 11px; letter-spacing: .5px;
+  padding: 5px 8px; border-radius: 3px;
+  border: 1px solid #1e1e1e; background: #0d0d0d;
+  color: #666; cursor: pointer; flex: 1;
+  font-family: 'Share Tech Mono', monospace;
+}
+.challenge-item {
+  padding: 12px 14px; border-bottom: 1px solid #111;
+  cursor: pointer; transition: background .12s;
+}
+.challenge-item:hover { background: #0d0d0d; }
+.challenge-item.active { background: #0f0808; border-left: 2px solid #cc0000; }
+.challenge-item.done .ci-title { color: #2a2a2a; text-decoration: line-through; }
+.ci-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.ci-num { font-size: 10px; color: #2a2a2a; margin-right: 6px; }
+.ci-title { font-size: 13px; color: #999; }
+.ci-badges { display: flex; gap: 4px; }
+.badge { font-size: 10px; padding: 1px 7px; border-radius: 2px; letter-spacing: .5px; }
+.b-easy   { background: #001408; color: #00aa55; border: 1px solid #003311; }
+.b-medium { background: #140a00; color: #cc7700; border: 1px solid #331a00; }
+.b-hard   { background: #140000; color: #cc2200; border: 1px solid #330000; }
+.b-topic  { background: #0a0a0a; color: #444; border: 1px solid #1a1a1a; }
+.done-dot { width: 7px; height: 7px; border-radius: 50%; background: #00aa55; flex-shrink: 0; }
+
+/* Welcome */
+.main-welcome {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+}
+.skynet-logo {
+  font-family: 'Orbitron', monospace;
+  font-size: 52px; font-weight: 900;
+  letter-spacing: 10px; color: #ff2200;
+  text-shadow: 0 0 30px rgba(255,34,0,0.4), 0 0 60px rgba(255,34,0,0.15);
+  text-transform: uppercase;
+}
+.skynet-tagline {
+  font-size: 11px; letter-spacing: 4px;
+  color: #331100; text-transform: uppercase; margin-top: 4px;
+}
+.skynet-hint {
+  font-size: 12px; letter-spacing: 1px; color: #2a2a2a; margin-top: 16px;
+}
+
+/* ── Editor view ── */
+#editor-view { display: none; height: calc(100vh - 50px); }
+.split { display: flex; height: 100%; }
+.left-panel {
+  width: 42%; min-width: 300px;
+  background: #080808; border-right: 1px solid #161616;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.right-panel { flex: 1; background: #0a0a0a; display: flex; flex-direction: column; overflow: hidden; }
+
+.lp-header {
+  padding: 12px 16px 10px; border-bottom: 1px solid #161616;
+  display: flex; align-items: center; gap: 8px; background: #0a0a0a;
+}
+.lp-header h2 {
+  font-size: 13px; font-weight: 600; color: #999;
+  font-family: 'Orbitron', monospace; letter-spacing: 1px;
+}
+.back-btn {
+  font-size: 11px; padding: 4px 10px; border-radius: 3px;
+  border: 1px solid #1e1e1e; background: transparent;
+  color: #444; cursor: pointer; letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.back-btn:hover { border-color: #cc0000; color: #ff2200; }
+.lp-tabs { display: flex; border-bottom: 1px solid #161616; background: #080808; }
+.lp-tab {
+  font-size: 11px; padding: 8px 16px; border: none;
+  background: transparent; color: #333; cursor: pointer;
+  border-bottom: 2px solid transparent;
+  letter-spacing: 1px; text-transform: uppercase; transition: all .12s;
+}
+.lp-tab.active { color: #ff2200; border-bottom-color: #cc0000; }
+.lp-tab:hover { color: #884422; }
+
+.lp-body { flex: 1; overflow-y: auto; padding: 16px; }
+.lp-body::-webkit-scrollbar { width: 3px; }
+.lp-body::-webkit-scrollbar-thumb { background: #1a0000; }
+.desc-text { font-size: 13px; color: #666; line-height: 1.8; white-space: pre-wrap; }
+.schema-box {
+  background: #050505; border: 1px solid #1a1a1a;
+  border-radius: 3px; padding: 12px 14px; margin-top: 14px;
+  font-size: 12px; color: #446655; line-height: 1.9;
+}
+.schema-box b { color: #cc4400; }
+
+.note-area {
+  width: 100%; background: #050505; border: 1px solid #1a1a1a;
+  border-radius: 3px; color: #666; font-size: 13px;
+  padding: 10px 12px; resize: vertical;
+  font-family: 'Share Tech Mono', monospace;
+  min-height: 130px; line-height: 1.7;
+}
+.save-note-btn {
+  margin-top: 8px; font-size: 11px; padding: 5px 16px;
+  border-radius: 3px; border: 1px solid #1e1e1e;
+  background: transparent; color: #444; cursor: pointer;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.save-note-btn:hover { border-color: #cc0000; color: #ff2200; }
+.note-saved { font-size: 11px; color: #00aa55; margin-top: 6px; display: none; letter-spacing: 1px; }
+
+/* Right panel */
+.rp-header {
+  height: 42px; background: #0d0d0d;
+  border-bottom: 1px solid #161616;
+  display: flex; align-items: center; padding: 0 14px; gap: 8px;
+}
+.lang-badge {
+  font-size: 11px; background: #111; color: #444;
+  padding: 2px 8px; border-radius: 3px;
+  border: 1px solid #1e1e1e; letter-spacing: 1px;
+}
+.rp-header-right { margin-left: auto; display: flex; gap: 8px; }
+.btn-hint {
+  font-size: 11px; padding: 5px 14px; border-radius: 3px;
+  border: 1px solid #1e1e1e; background: transparent;
+  color: #444; cursor: pointer; letter-spacing: 1px; text-transform: uppercase;
+}
+.btn-hint:hover { border-color: #555; color: #888; }
+.btn-bookmark {
+  font-size: 11px; padding: 5px 14px; border-radius: 3px;
+  border: 1px solid #1e1e1e; background: transparent;
+  color: #444; cursor: pointer; letter-spacing: 1px; text-transform: uppercase;
+}
+.btn-bookmark.on { color: #cc7700; border-color: #cc7700; }
+.btn-run {
+  font-size: 12px; padding: 5px 18px; border-radius: 3px;
+  border: 1px solid #cc0000; background: transparent;
+  color: #ff2200; font-weight: 700; cursor: pointer;
+  letter-spacing: 2px; text-transform: uppercase;
+  transition: all .15s;
+}
+.btn-run:hover { background: #cc0000; color: #fff; }
+.btn-submit {
+  font-size: 12px; padding: 5px 18px; border-radius: 3px;
+  border: none; background: #cc0000;
+  color: #fff; font-weight: 700; cursor: pointer;
+  letter-spacing: 2px; text-transform: uppercase;
+  transition: all .15s;
+}
+.btn-submit:hover { background: #ff2200; }
+
+.editor-wrap { flex: 1; overflow: hidden; }
+.CodeMirror { height: 100% !important; font-size: 13px; font-family: 'Share Tech Mono', monospace; }
+.CodeMirror-scroll { height: 100%; }
+
+.output-panel { height: 200px; background: #050505; border-top: 1px solid #161616; display: flex; flex-direction: column; }
+.output-header {
+  height: 32px; background: #0a0a0a;
+  border-bottom: 1px solid #161616;
+  display: flex; align-items: center;
+  padding: 0 14px; font-size: 11px; color: #333;
+  letter-spacing: 1px; text-transform: uppercase; gap: 10px;
+}
+.output-body {
+  flex: 1; overflow-y: auto; padding: 10px 14px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; line-height: 1.7; color: #666; white-space: pre-wrap;
+}
+.output-body.err { color: #cc2200; }
+.output-body.ok  { color: #00aa55; }
+.output-body::-webkit-scrollbar { width: 3px; }
+.output-body::-webkit-scrollbar-thumb { background: #1a0000; }
+
+.sql-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sql-table th { background: #111; color: #cc4400; padding: 5px 10px; text-align: left; border: 1px solid #1a1a1a; font-weight: 500; letter-spacing: 1px; }
+.sql-table td { padding: 4px 10px; border: 1px solid #111; color: #666; }
+.sql-table tr:hover td { background: #0d0d0d; }
+
+.hint-box {
+  background: #050505; border: 1px solid #1a1a1a;
+  border-left: 2px solid #cc0000;
+  border-radius: 3px; padding: 12px 14px;
+  font-size: 13px; color: #666; line-height: 1.8;
+  margin-top: 10px; white-space: pre-wrap;
+}
+.hint-loading { font-size: 12px; color: #333; font-style: italic; margin-top: 8px; letter-spacing: 1px; }
+
+/* News */
+#news-view { display: none; padding: 2rem; max-width: 860px; margin: 0 auto; height: calc(100vh - 50px); overflow-y: auto; }
+#news-view::-webkit-scrollbar { width: 3px; }
+#news-view::-webkit-scrollbar-thumb { background: #1a0000; }
+.news-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+.news-top h2 { font-family: 'Orbitron', monospace; font-size: 16px; font-weight: 700; color: #ff2200; letter-spacing: 3px; text-transform: uppercase; }
+.fetch-btn {
+  font-size: 11px; padding: 6px 16px; border-radius: 3px;
+  border: 1px solid #cc0000; background: transparent;
+  color: #ff2200; cursor: pointer; letter-spacing: 1px; text-transform: uppercase;
+}
+.fetch-btn:hover { background: #cc0000; color: #fff; }
+.news-card { background: #080808; border: 1px solid #111; border-radius: 4px; padding: 14px 16px; margin-bottom: 10px; transition: border-color .15s; }
+.news-card:hover { border-color: #1a0000; }
+.nc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.nc-title { font-size: 14px; font-weight: 500; color: #888; margin-bottom: 4px; }
+.nc-title a { color: #888; text-decoration: none; }
+.nc-title a:hover { color: #ff2200; }
+.nc-summary { font-size: 12px; color: #444; line-height: 1.6; }
+.nc-date { font-size: 11px; color: #2a2a2a; margin-top: 5px; letter-spacing: 1px; }
+.tag { font-size: 10px; padding: 2px 8px; border-radius: 2px; white-space: nowrap; letter-spacing: .5px; }
+.tag-ai       { background: #050510; color: #4466bb; border: 1px solid #111122; }
+.tag-tools    { background: #100800; color: #cc7700; border: 1px solid #221100; }
+.tag-research { background: #080508; color: #664488; border: 1px solid #110811; }
+.empty { text-align: center; color: #2a2a2a; font-size: 13px; padding: 3rem 0; letter-spacing: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<div class="nav">
+  <div class="nav-logo">
+    <div class="nav-logo-text">SkyNet</div>
+    <div class="nav-logo-sub">Data Intelligence System</div>
+  </div>
+  <div class="nav-divider"></div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showView('list')">Problems</button>
+    <button class="nav-tab" onclick="showView('news')">DS/AI Intel</button>
+  </div>
+  <div class="nav-right">
+    <div class="stat-pill">Solved <span id="nav-done">0</span>/<span id="nav-total">0</span></div>
+    <div class="stat-pill">Saved <span id="nav-bk">0</span></div>
+  </div>
+</div>
+
+<!-- List view -->
+<div id="list-view">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <select class="filter-sel" id="filter-topic" onchange="renderList()">
+        <option value="">All topics</option>
+        <option>Data Wrangling</option>
+        <option>ML Fundamentals</option>
+        <option>SQL</option>
+      </select>
+      <select class="filter-sel" id="filter-diff" onchange="renderList()">
+        <option value="">All levels</option>
+        <option>Easy</option>
+        <option>Medium</option>
+        <option>Hard</option>
+      </select>
+    </div>
+    <div id="challenge-list"></div>
+  </div>
+  <div class="main-welcome" id="welcome-panel">
+    <div class="skynet-logo">SkyNet</div>
+    <div class="skynet-tagline">Data Intelligence Training System</div>
+    <div class="skynet-hint">← Select a mission to begin</div>
+  </div>
+</div>
+
+<!-- Editor view -->
+<div id="editor-view">
+  <div class="split">
+    <div class="left-panel">
+      <div class="lp-header">
+        <button class="back-btn" onclick="showView('list')">← Back</button>
+        <h2 id="lp-title">Mission</h2>
+        <div id="lp-badges" style="display:flex;gap:4px;margin-left:4px;"></div>
+      </div>
+      <div class="lp-tabs">
+        <button class="lp-tab active" onclick="lpTab('desc')">Briefing</button>
+        <button class="lp-tab" onclick="lpTab('notes')">Notes</button>
+        <button class="lp-tab" onclick="lpTab('hint')">AI Hint</button>
+      </div>
+      <div class="lp-body">
+        <div id="lp-desc">
+          <div class="desc-text" id="desc-text"></div>
+          <div id="schema-area"></div>
+        </div>
+        <div id="lp-notes" style="display:none">
+          <textarea class="note-area" id="note-textarea" placeholder="// Enter your notes here..."></textarea>
+          <button class="save-note-btn" onclick="saveNote()">Save</button>
+          <div class="note-saved" id="note-saved">// Saved successfully</div>
+        </div>
+        <div id="lp-hint" style="display:none">
+          <button class="save-note-btn" onclick="fetchHint()" id="hint-btn">Request AI Hint</button>
+          <div id="hint-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <div class="rp-header">
+        <span class="lang-badge" id="lang-badge">Python</span>
+        <div class="rp-header-right">
+          <button class="btn-bookmark" id="bk-btn" onclick="toggleBookmark()">☆ Save</button>
+          <button class="btn-hint" onclick="lpTab('hint')">Hint</button>
+          <button class="btn-run" onclick="runCode()">▶ Execute</button>
+          <button class="btn-submit" onclick="submitCode()">Submit</button>
+        </div>
+      </div>
+      <div class="editor-wrap">
+        <textarea id="main-editor"></textarea>
+      </div>
+      <div class="output-panel">
+        <div class="output-header">
+          <span>// Output</span>
+          <span id="run-status" style="color:#2a2a2a;letter-spacing:1px;"></span>
+        </div>
+        <div class="output-body" id="output-body">// Execute your code to see output</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- News view -->
+<div id="news-view">
+  <div class="news-top">
+    <h2>// DS &amp; AI Intel Feed</h2>
+    <button class="fetch-btn" onclick="loadNews()">↻ Sync Feed</button>
+  </div>
+  <div id="news-list"><div class="empty">// Awaiting sync — click Sync Feed</div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+<script>
+let challenges = [], currentId = null, editor = null;
+
+async function init() {
+  const res = await fetch("/api/challenges");
+  challenges = await res.json();
+  updateNav(); renderList(); initEditor();
+}
+
+function updateNav() {
+  const done = challenges.filter(c => c.done).length;
+  const bk   = challenges.filter(c => c.bookmarked).length;
+  document.getElementById("nav-done").textContent  = done;
+  document.getElementById("nav-total").textContent = challenges.length;
+  document.getElementById("nav-bk").textContent    = bk;
+}
+
+function renderList() {
+  const topic = document.getElementById("filter-topic").value;
+  const diff  = document.getElementById("filter-diff").value;
+  const list  = challenges.filter(c => {
+    if (topic && c.topic !== topic) return false;
+    if (diff  && c.difficulty !== diff) return false;
+    return true;
+  });
+  const container = document.getElementById("challenge-list");
+  if (!list.length) { container.innerHTML = '<div class="empty">// No missions found</div>'; return; }
+  container.innerHTML = list.map((c, i) => `
+    <div class="challenge-item ${c.done ? 'done' : ''} ${c.id === currentId ? 'active' : ''}"
+         onclick="openChallenge(${c.id})">
+      <div class="ci-top">
+        <span class="ci-title"><span class="ci-num">${String(i+1).padStart(2,'0')}.</span> ${c.title}</span>
+        ${c.done ? '<div class="done-dot"></div>' : ''}
+      </div>
+      <div class="ci-badges">
+        <span class="badge b-${c.difficulty.toLowerCase()}">${c.difficulty}</span>
+        <span class="badge b-topic">${c.topic}</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+function initEditor() {
+  editor = CodeMirror.fromTextArea(document.getElementById("main-editor"), {
+    theme: "dracula", lineNumbers: true,
+    indentUnit: 4, tabSize: 4,
+    indentWithTabs: false, lineWrapping: false, autofocus: true
+  });
+}
+
+function openChallenge(id) {
+  currentId = id;
+  const c = challenges.find(x => x.id === id);
+  if (!c) return;
+  const isSQL = c.topic === "SQL";
+  editor.setOption("mode", isSQL ? "text/x-sql" : "python");
+  document.getElementById("lang-badge").textContent = isSQL ? "SQL" : "Python";
+  editor.setValue(c.saved_code || c.starter_code || "");
+  setTimeout(() => editor.refresh(), 50);
+  document.getElementById("lp-title").textContent = c.title;
+  document.getElementById("lp-badges").innerHTML = `
+    <span class="badge b-${c.difficulty.toLowerCase()}">${c.difficulty}</span>
+    <span class="badge b-topic">${c.topic}</span>
+  `;
+  document.getElementById("desc-text").textContent = c.description;
+  const schemaArea = document.getElementById("schema-area");
+  if (isSQL) {
+    schemaArea.innerHTML = `
+      <div class="schema-box">
+<b>// Available tables:</b>
+employees  → id, name, department, dept_id, salary, age
+departments → id, dept_name, location
+
+<b>// Sample data (employees):</b>
+Alice   | Engineering | salary: 95000
+Bob     | Marketing   | salary: 62000
+Charlie | Engineering | salary: 88000
+Diana   | HR          | salary: 55000
+Eve     | Engineering | salary: 102000
+      </div>`;
+  } else { schemaArea.innerHTML = ""; }
+  document.getElementById("note-textarea").value = c.note || "";
+  document.getElementById("note-saved").style.display = "none";
+  document.getElementById("hint-content").innerHTML = "";
+  const bkBtn = document.getElementById("bk-btn");
+  bkBtn.textContent = c.bookmarked ? "★ Saved" : "☆ Save";
+  bkBtn.className   = "btn-bookmark" + (c.bookmarked ? " on" : "");
+  document.getElementById("output-body").textContent = "// Execute your code to see output";
+  document.getElementById("output-body").className   = "output-body";
+  document.getElementById("run-status").textContent  = "";
+  lpTab("desc"); showView("editor"); renderList();
+}
+
+function lpTab(name) {
+  ["desc","notes","hint"].forEach(t => {
+    document.getElementById("lp-" + t).style.display = t === name ? "" : "none";
+  });
+  document.querySelectorAll(".lp-tab").forEach((btn, i) => {
+    btn.classList.toggle("active", ["desc","notes","hint"][i] === name);
+  });
+}
+
+async function runCode() {
+  const c = challenges.find(x => x.id === currentId);
+  if (!c) return;
+  const code = editor.getValue();
+  const isSQL = c.topic === "SQL";
+  const out = document.getElementById("output-body");
+  const status = document.getElementById("run-status");
+  out.className = "output-body"; out.textContent = "// Running..."; status.textContent = "";
+  const res  = await fetch(isSQL ? "/api/sql" : "/api/run", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code })
+  });
+  const data = await res.json();
+  if (data.error) {
+    out.className = "output-body err";
+    out.textContent = "// Error: " + data.error;
+    status.style.color = "#cc2200"; status.textContent = "// Error";
+  } else if (data.columns) {
+    out.className = "output-body ok";
+    out.innerHTML = buildTable(data.columns, data.rows);
+    status.style.color = "#00aa55"; status.textContent = `// ${data.rows.length} row(s) returned`;
+  } else {
+    out.className = "output-body ok";
+    out.textContent = data.output;
+    status.style.color = "#00aa55"; status.textContent = "// Success";
+  }
+}
+
+function buildTable(cols, rows) {
+  if (!rows.length) return '<span style="color:#444">// No rows returned.</span>';
+  const ths = cols.map(c => `<th>${c}</th>`).join("");
+  const trs = rows.map(r => `<tr>${r.map(v => `<td>${v ?? 'NULL'}</td>`).join("")}</tr>`).join("");
+  return `<table class="sql-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+async function submitCode() {
+  const code = editor.getValue();
+  await fetch(`/api/challenges/${currentId}/solution`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code })
+  });
+  await fetch(`/api/challenges/${currentId}/done`, { method: "POST" });
+  challenges = challenges.map(c => c.id === currentId ? { ...c, done: 1, saved_code: code } : c);
+  updateNav(); renderList();
+  const status = document.getElementById("run-status");
+  status.style.color = "#00aa55"; status.textContent = "// Submitted";
+}
+
+async function toggleBookmark() {
+  const res  = await fetch(`/api/challenges/${currentId}/bookmark`, { method: "POST" });
+  const data = await res.json();
+  challenges = challenges.map(c => c.id === currentId ? { ...c, bookmarked: data.bookmarked ? 1 : 0 } : c);
+  const bkBtn = document.getElementById("bk-btn");
+  bkBtn.textContent = data.bookmarked ? "★ Saved" : "☆ Save";
+  bkBtn.className   = "btn-bookmark" + (data.bookmarked ? " on" : "");
+  updateNav();
+}
+
+async function saveNote() {
+  const content = document.getElementById("note-textarea").value;
+  await fetch(`/api/challenges/${currentId}/note`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content })
+  });
+  challenges = challenges.map(c => c.id === currentId ? { ...c, note: content } : c);
+  const saved = document.getElementById("note-saved");
+  saved.style.display = "block";
+  setTimeout(() => saved.style.display = "none", 2000);
+}
+
+async function fetchHint() {
+  const btn = document.getElementById("hint-btn");
+  const area = document.getElementById("hint-content");
+  btn.textContent = "// Loading..."; btn.disabled = true;
+  area.innerHTML = '<div class="hint-loading">// Contacting AI... please wait</div>';
+  const res  = await fetch(`/api/hint/${currentId}`);
+  const data = await res.json();
+  btn.textContent = "Request AI Hint"; btn.disabled = false;
+  area.innerHTML = data.error
+    ? `<div style="color:#cc2200;font-size:12px;margin-top:8px">// Error: ${data.error}</div>`
+    : `<div class="hint-box">${data.hint}</div>`;
+}
+
+async function loadNews() {
+  const list = document.getElementById("news-list");
+  list.innerHTML = '<div class="empty">// Syncing feed...</div>';
+  const res  = await fetch("/api/news");
+  const data = await res.json();
+  if (data.error) { list.innerHTML = `<div style="color:#cc2200;padding:1rem;font-size:12px">// Error: ${data.error}</div>`; return; }
+  const tagClass = { "AI News":"tag-ai","Tools":"tag-tools","Research":"tag-research","Industry":"tag-research" };
+  list.innerHTML = data.map(n => `
+    <div class="news-card">
+      <div class="nc-top">
+        <div style="flex:1">
+          <div class="nc-title">${n.link ? `<a href="${n.link}" target="_blank">${n.title}</a>` : n.title}</div>
+          <div class="nc-summary">${n.summary}</div>
+          <div class="nc-date">// ${n.date}</div>
+        </div>
+        <span class="tag ${tagClass[n.tag] || 'tag-research'}">${n.tag}</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+function showView(name) {
+  document.getElementById("list-view").style.display   = name === "list"   ? "flex"  : "none";
+  document.getElementById("editor-view").style.display = name === "editor" ? "block" : "none";
+  document.getElementById("news-view").style.display   = name === "news"   ? "block" : "none";
+  document.querySelectorAll(".nav-tab").forEach((t, i) => {
+    t.classList.toggle("active", (i === 0 && name !== "news") || (i === 1 && name === "news"));
+  });
+  if (name === "list") { currentId = null; renderList(); }
+  if (name === "editor" && editor) setTimeout(() => editor.refresh(), 50);
+}
+
+init();
+</script>
+</body>
+</html>
