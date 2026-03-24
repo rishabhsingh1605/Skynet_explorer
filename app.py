@@ -500,6 +500,9 @@ def get_news():
         {"title":"A Survey on Transfer Learning","summary":"Comprehensive survey covering transfer learning methods.","tag":"Research","date":"2019-08-01","link":"https://arxiv.org/abs/1911.02685"},
     ])
 
+@app.route("/health")
+def health():
+    return "OK", 200
 
 if __name__ == "__main__":
     init_db()
