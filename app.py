@@ -8,15 +8,12 @@ import urllib.error
 import xml.etree.ElementTree as ET
 import sys
 import io
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from werkzeug.security import generate_password_hash, check_password_hash
-from functools import wraps
+from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "skynet-secret-key-2026")
 DB = "database.db"
 
 # ── Database setup ────────────────────────────────────────────────
@@ -28,28 +25,21 @@ def get_db():
 def init_db():
     conn = get_db()
     conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            username     TEXT UNIQUE NOT NULL,
-            email        TEXT UNIQUE NOT NULL,
-            password     TEXT NOT NULL,
-            created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
         CREATE TABLE IF NOT EXISTS challenges (
             id           INTEGER PRIMARY KEY,
             title        TEXT,
             topic        TEXT,
             difficulty   TEXT,
             description  TEXT,
-            starter_code TEXT
+            starter_code TEXT,
+            done         INTEGER DEFAULT 0,
+            bookmarked   INTEGER DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS notes (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id      INTEGER,
-            challenge_id INTEGER,
+            challenge_id INTEGER UNIQUE,
             content      TEXT,
-            updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, challenge_id)
+            updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS news_cache (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,13 +48,11 @@ def init_db():
         );
         CREATE TABLE IF NOT EXISTS user_solutions (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id      INTEGER,
-            challenge_id INTEGER,
+            challenge_id INTEGER UNIQUE,
             code         TEXT,
             done         INTEGER DEFAULT 0,
             bookmarked   INTEGER DEFAULT 0,
-            updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, challenge_id)
+            updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS hint_cache (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,186 +129,81 @@ def init_db():
     conn.close()
 
 
-# ── Auth helpers ───────────────────────────────────────────────────
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if "user_id" not in session:
-            return redirect(url_for("login_page"))
-        return f(*args, **kwargs)
-    return decorated
-
-def current_user_id():
-    return session.get("user_id")
-
-
-# ── Auth routes ────────────────────────────────────────────────────
-@app.route("/login")
-def login_page():
-    if "user_id" in session:
-        return redirect(url_for("index"))
-    return render_template("auth.html", mode="login")
-
-@app.route("/signup")
-def signup_page():
-    if "user_id" in session:
-        return redirect(url_for("index"))
-    return render_template("auth.html", mode="signup")
-
-@app.route("/api/signup", methods=["POST"])
-def signup():
-    data     = request.json
-    username = data.get("username", "").strip()
-    email    = data.get("email", "").strip().lower()
-    password = data.get("password", "")
-
-    if not username or not email or not password:
-        return jsonify({"error": "All fields are required."}), 400
-    if len(password) < 6:
-        return jsonify({"error": "Password must be at least 6 characters."}), 400
-    if len(username) < 3:
-        return jsonify({"error": "Username must be at least 3 characters."}), 400
-
-    try:
-        conn = get_db()
-        conn.execute(
-            "INSERT INTO users(username, email, password) VALUES(?,?,?)",
-            (username, email, generate_password_hash(password))
-        )
-        conn.commit()
-        user = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
-        conn.close()
-        session["user_id"]  = user["id"]
-        session["username"] = user["username"]
-        return jsonify({"ok": True, "username": username})
-    except sqlite3.IntegrityError:
-        return jsonify({"error": "Username or email already exists."}), 400
-
-@app.route("/api/login", methods=["POST"])
-def login():
-    data     = request.json
-    email    = data.get("email", "").strip().lower()
-    password = data.get("password", "")
-
-    conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
-    conn.close()
-
-    if not user or not check_password_hash(user["password"], password):
-        return jsonify({"error": "Invalid email or password."}), 401
-
-    session["user_id"]  = user["id"]
-    session["username"] = user["username"]
-    return jsonify({"ok": True, "username": user["username"]})
-
-@app.route("/api/logout", methods=["POST"])
-def logout():
-    session.clear()
-    return jsonify({"ok": True})
-
-@app.route("/api/me")
-def me():
-    if "user_id" not in session:
-        return jsonify({"logged_in": False})
-    return jsonify({"logged_in": True, "username": session["username"], "user_id": session["user_id"]})
-
-
-# ── Main app ───────────────────────────────────────────────────────
+# ── Routes ─────────────────────────────────────────────────────────
 @app.route("/")
-@login_required
 def index():
     return render_template("index.html")
 
+@app.route("/health")
+def health():
+    return "OK", 200
 
-# ── Challenge routes ───────────────────────────────────────────────
 @app.route("/api/challenges")
-@login_required
 def get_challenges():
-    uid  = current_user_id()
     conn = get_db()
     rows = conn.execute("""
-        SELECT c.*,
-               COALESCE(s.done, 0)       as done,
-               COALESCE(s.bookmarked, 0) as bookmarked,
-               s.code                    as saved_code,
-               n.content                 as note,
-               h.content                 as cached_hint
+        SELECT c.*, n.content as note, s.code as saved_code,
+               COALESCE(s.done,0) as done,
+               COALESCE(s.bookmarked,0) as bookmarked,
+               h.content as cached_hint
         FROM challenges c
-        LEFT JOIN user_solutions s ON c.id = s.challenge_id AND s.user_id = ?
-        LEFT JOIN notes n          ON c.id = n.challenge_id AND n.user_id = ?
-        LEFT JOIN hint_cache h     ON c.id = h.challenge_id
-    """, (uid, uid)).fetchall()
+        LEFT JOIN notes n ON c.id = n.challenge_id
+        LEFT JOIN user_solutions s ON c.id = s.challenge_id
+        LEFT JOIN hint_cache h ON c.id = h.challenge_id
+    """).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
-
 @app.route("/api/challenges/<int:cid>/done", methods=["POST"])
-@login_required
 def toggle_done(cid):
-    uid  = current_user_id()
     conn = get_db()
     conn.execute("""
-        INSERT INTO user_solutions(user_id, challenge_id, done) VALUES(?,?,1)
-        ON CONFLICT(user_id, challenge_id) DO UPDATE SET done = NOT done
-    """, (uid, cid))
+        INSERT INTO user_solutions(challenge_id, done) VALUES(?,1)
+        ON CONFLICT(challenge_id) DO UPDATE SET done = NOT done
+    """, (cid,))
     conn.commit()
-    row = conn.execute(
-        "SELECT done FROM user_solutions WHERE user_id=? AND challenge_id=?", (uid, cid)
-    ).fetchone()
+    row = conn.execute("SELECT done FROM user_solutions WHERE challenge_id=?", (cid,)).fetchone()
     conn.close()
     return jsonify({"done": bool(row["done"]) if row else False})
 
-
 @app.route("/api/challenges/<int:cid>/bookmark", methods=["POST"])
-@login_required
 def toggle_bookmark(cid):
-    uid  = current_user_id()
     conn = get_db()
     conn.execute("""
-        INSERT INTO user_solutions(user_id, challenge_id, bookmarked) VALUES(?,?,1)
-        ON CONFLICT(user_id, challenge_id) DO UPDATE SET bookmarked = NOT bookmarked
-    """, (uid, cid))
+        INSERT INTO user_solutions(challenge_id, bookmarked) VALUES(?,1)
+        ON CONFLICT(challenge_id) DO UPDATE SET bookmarked = NOT bookmarked
+    """, (cid,))
     conn.commit()
-    row = conn.execute(
-        "SELECT bookmarked FROM user_solutions WHERE user_id=? AND challenge_id=?", (uid, cid)
-    ).fetchone()
+    row = conn.execute("SELECT bookmarked FROM user_solutions WHERE challenge_id=?", (cid,)).fetchone()
     conn.close()
     return jsonify({"bookmarked": bool(row["bookmarked"]) if row else False})
 
-
 @app.route("/api/challenges/<int:cid>/note", methods=["POST"])
-@login_required
 def save_note(cid):
-    uid     = current_user_id()
     content = request.json.get("content", "")
     conn    = get_db()
     conn.execute("""
-        INSERT INTO notes(user_id, challenge_id, content) VALUES(?,?,?)
-        ON CONFLICT(user_id, challenge_id) DO UPDATE SET content=excluded.content, updated_at=CURRENT_TIMESTAMP
-    """, (uid, cid, content))
+        INSERT INTO notes(challenge_id, content) VALUES(?,?)
+        ON CONFLICT(challenge_id) DO UPDATE SET content=excluded.content, updated_at=CURRENT_TIMESTAMP
+    """, (cid, content))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
 
-
 @app.route("/api/challenges/<int:cid>/solution", methods=["POST"])
-@login_required
 def save_solution(cid):
-    uid  = current_user_id()
     code = request.json.get("code", "")
     conn = get_db()
     conn.execute("""
-        INSERT INTO user_solutions(user_id, challenge_id, code, done) VALUES(?,?,?,1)
-        ON CONFLICT(user_id, challenge_id) DO UPDATE SET code=excluded.code, done=1, updated_at=CURRENT_TIMESTAMP
-    """, (uid, cid, code))
+        INSERT INTO user_solutions(challenge_id, code, done) VALUES(?,?,1)
+        ON CONFLICT(challenge_id) DO UPDATE SET code=excluded.code, done=1, updated_at=CURRENT_TIMESTAMP
+    """, (cid, code))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
 
-
 # ── Python runner ──────────────────────────────────────────────────
 @app.route("/api/run", methods=["POST"])
-@login_required
 def run_code():
     code = request.json.get("code", "")
     if not code.strip():
@@ -335,10 +218,8 @@ def run_code():
         sys.stdout = old_stdout
         return jsonify({"error": str(e)})
 
-
 # ── SQL runner ─────────────────────────────────────────────────────
 @app.route("/api/sql", methods=["POST"])
-@login_required
 def run_sql():
     query = request.json.get("code", "").strip()
     if not query:
@@ -353,7 +234,6 @@ def run_sql():
         return jsonify({"columns": cols, "rows": [list(r) for r in rows]})
     except Exception as e:
         return jsonify({"error": str(e)})
-
 
 # ── Built-in hints ─────────────────────────────────────────────────
 def builtin_hint(ch):
@@ -370,141 +250,3 @@ def builtin_hint(ch):
         ],
         "SQL": [
             "Use WHERE to filter rows — it runs before GROUP BY.",
-            "Use HAVING to filter groups after GROUP BY.",
-            "Use JOIN ... ON table1.id = table2.fk_id to connect tables.",
-        ]
-    }
-    topic_hints = hints.get(ch["topic"], [
-        "Break the problem into smaller steps.",
-        "Print intermediate results to debug your code.",
-        "Re-read the description carefully before coding.",
-    ])
-    return "\n".join(f"• {h}" for h in topic_hints)
-
-
-@app.route("/api/hint/<int:cid>")
-@login_required
-def get_hint(cid):
-    conn   = get_db()
-    ch     = conn.execute("SELECT * FROM challenges WHERE id=?", (cid,)).fetchone()
-    cached = conn.execute("SELECT content FROM hint_cache WHERE challenge_id=?", (cid,)).fetchone()
-    conn.close()
-
-    if cached:
-        return jsonify({"hint": cached["content"], "source": "cache"})
-
-    key = os.getenv("HF_API_KEY")
-    if key:
-        try:
-            prompt = (
-                f"I am a beginner in Data Science working on this challenge:\n"
-                f"Title: {ch['title']}\nDescription: {ch['description']}\n\n"
-                f"Give me exactly 3 short beginner-friendly hints (not the full solution). "
-                f"Format as bullet points starting with •. Be concise."
-            )
-            data = json.dumps({
-                "inputs": prompt,
-                "parameters": {"max_new_tokens": 250, "temperature": 0.5, "return_full_text": False}
-            }).encode("utf-8")
-            req = urllib.request.Request(
-                "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
-                data=data,
-                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-            )
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                result = json.loads(resp.read().decode())
-            if isinstance(result, list) and result:
-                hint_text = result[0].get("generated_text", "").strip()
-                if hint_text:
-                    conn = get_db()
-                    conn.execute("""
-                        INSERT INTO hint_cache(challenge_id, content) VALUES(?,?)
-                        ON CONFLICT(challenge_id) DO UPDATE SET content=excluded.content
-                    """, (cid, hint_text))
-                    conn.commit()
-                    conn.close()
-                    return jsonify({"hint": hint_text, "source": "ai"})
-        except Exception as e:
-            print(f"HuggingFace hint failed: {e}")
-
-    hint_text = builtin_hint(ch)
-    conn = get_db()
-    conn.execute("""
-        INSERT INTO hint_cache(challenge_id, content) VALUES(?,?)
-        ON CONFLICT(challenge_id) DO UPDATE SET content=excluded.content
-    """, (cid, hint_text))
-    conn.commit()
-    conn.close()
-    return jsonify({"hint": hint_text, "source": "builtin"})
-
-
-# ── News ───────────────────────────────────────────────────────────
-@app.route("/api/news")
-@login_required
-def get_news():
-    sources = [
-        "https://export.arxiv.org/rss/cs.LG",
-        "https://export.arxiv.org/rss/cs.AI",
-    ]
-    for source_url in sources:
-        try:
-            req = urllib.request.Request(
-                source_url,
-                headers={"User-Agent": "Mozilla/5.0 Chrome/120.0.0.0", "Accept": "*/*"}
-            )
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                xml_data = resp.read().decode("utf-8", errors="ignore")
-            root  = ET.fromstring(xml_data)
-            items = root.findall(".//item")
-            news  = []
-            for item in items[:8]:
-                title_el   = item.find("title")
-                link_el    = item.find("link")
-                desc_el    = item.find("description")
-                pubdate_el = item.find("pubDate")
-                if title_el is None: continue
-                title   = title_el.text.strip() if title_el.text else "No title"
-                link    = link_el.text.strip() if link_el is not None and link_el.text else ""
-                summary = re.sub(r'<[^>]+>', '', desc_el.text).strip()[:200]+"..." if desc_el is not None and desc_el.text else ""
-                date    = pubdate_el.text[:16] if pubdate_el is not None and pubdate_el.text else ""
-                tl = title.lower()
-                tag = "AI News" if any(w in tl for w in ["language model","llm","gpt","transformer","generative","neural"]) \
-                    else "Tools" if any(w in tl for w in ["efficient","framework","tool","library","system"]) \
-                    else "Research"
-                news.append({"title":title,"summary":summary,"tag":tag,"date":date,"link":link})
-            if news:
-                conn = get_db()
-                conn.execute("DELETE FROM news_cache")
-                conn.execute("INSERT INTO news_cache(content) VALUES(?)", (json.dumps(news),))
-                conn.commit()
-                conn.close()
-                return jsonify(news)
-        except Exception as e:
-            print(f"RSS source failed: {e}")
-            continue
-
-    try:
-        conn = get_db()
-        cached = conn.execute("SELECT content FROM news_cache ORDER BY fetched_at DESC LIMIT 1").fetchone()
-        conn.close()
-        if cached: return jsonify(json.loads(cached["content"]))
-    except Exception:
-        pass
-
-    return jsonify([
-        {"title":"Attention Is All You Need","summary":"The seminal paper introducing the Transformer model.","tag":"Research","date":"2017-06-12","link":"https://arxiv.org/abs/1706.03762"},
-        {"title":"BERT: Pre-training of Deep Bidirectional Transformers","summary":"Google's BERT model for language understanding.","tag":"AI News","date":"2018-10-11","link":"https://arxiv.org/abs/1810.04805"},
-        {"title":"XGBoost: A Scalable Tree Boosting System","summary":"Highly efficient gradient boosting framework for data science.","tag":"Tools","date":"2016-03-09","link":"https://arxiv.org/abs/1603.02754"},
-        {"title":"Random Forests — Ensemble Learning Method","summary":"Breiman's algorithm combining multiple decision trees.","tag":"Research","date":"2001-10-01","link":"https://arxiv.org/abs/1106.0257"},
-        {"title":"Deep Residual Learning for Image Recognition","summary":"ResNet paper introducing skip connections for deep networks.","tag":"AI News","date":"2015-12-10","link":"https://arxiv.org/abs/1512.03385"},
-        {"title":"A Survey on Transfer Learning","summary":"Comprehensive survey covering transfer learning methods.","tag":"Research","date":"2019-08-01","link":"https://arxiv.org/abs/1911.02685"},
-    ])
-
-@app.route("/health")
-def health():
-    return "OK", 200
-
-if __name__ == "__main__":
-    init_db()
-    print("\nApp running at http://127.0.0.1:5000\n")
-    app.run(debug=True)
