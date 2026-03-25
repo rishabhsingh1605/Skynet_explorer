@@ -11,7 +11,6 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a1a;color:#eff2f699;overflow:hidden;}
 
-/* ── Navbar ── */
 .nav{height:44px;background:#282828;border-bottom:1px solid #3a3a3a;display:flex;align-items:center;padding:0 12px;gap:10px;position:relative;z-index:100;}
 .nav-logo{font-family:'Orbitron',monospace;font-size:16px;font-weight:900;letter-spacing:3px;color:#ef4743;text-shadow:0 0 12px rgba(239,71,67,0.4);flex-shrink:0;}
 .nav-sep{width:1px;height:20px;background:#3a3a3a;flex-shrink:0;}
@@ -21,12 +20,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .nav-right{margin-left:auto;display:flex;gap:6px;align-items:center;}
 .nav-stat{font-size:11px;color:#eff2f699;background:#3a3a3a;border-radius:5px;padding:3px 8px;white-space:nowrap;}
 .nav-stat b{color:#ef4743;}
-.nav-user{font-size:11px;color:#ffb800;background:#2a1e00;border:1px solid #3a2a00;border-radius:5px;padding:3px 8px;white-space:nowrap;}
-.btn-logout{font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid #3a3a3a;background:transparent;color:#eff2f666;cursor:pointer;}
-.btn-logout:hover{background:#3a3a3a;color:#fff;}
 .mobile-score{font-size:11px;color:#ef4743;font-weight:700;display:none;}
 
-/* ── List view ── */
 #list-view{display:flex;height:calc(100vh - 44px);}
 .sidebar{width:100%;background:#1a1a1a;overflow-y:auto;display:flex;flex-direction:column;}
 .sidebar::-webkit-scrollbar{width:4px;}
@@ -48,13 +43,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .diff-hard{color:#ef4743;font-size:12px;}
 .topic-tag{font-size:10px;padding:1px 6px;border-radius:4px;background:#2a2a2a;color:#eff2f666;}
 
-/* Welcome */
 .welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border-left:1px solid #2a2a2a;}
 .welcome-logo{font-family:'Orbitron',monospace;font-size:36px;font-weight:900;color:#ef4743;letter-spacing:6px;text-shadow:0 0 30px rgba(239,71,67,0.3);}
 .welcome-sub{font-size:12px;letter-spacing:2px;color:#3a3a3a;}
 .welcome-hint{font-size:12px;color:#3a3a3a;margin-top:8px;}
 
-/* ── Editor view ── */
 #editor-view{display:none;height:calc(100vh - 44px);}
 .split{display:flex;height:100%;}
 .left-panel{width:46%;min-width:300px;background:#282828;border-right:1px solid #3a3a3a;display:flex;flex-direction:column;overflow:hidden;}
@@ -113,7 +106,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .b-hard{color:#ef4743;background:#2a1a1a;border:1px solid #3a1a1a;}
 .b-topic{color:#eff2f666;background:#2a2a2a;border:1px solid #3a3a3a;}
 
-/* ── News ── */
 #news-view{display:none;height:calc(100vh - 44px);overflow-y:auto;background:#1a1a1a;}
 .news-container{max-width:900px;margin:0 auto;padding:20px 16px;}
 .news-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
@@ -134,14 +126,12 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .tag-research{background:#2a1a2a;color:#bc8cff;border:1px solid #3a2a3a;}
 .empty{text-align:center;color:#3a3a3a;font-size:13px;padding:3rem 0;}
 
-/* ══════════════════════════════════════
-   MOBILE
-══════════════════════════════════════ */
+/* ── Mobile ── */
 @media(max-width:768px){
   html,body{overflow:auto;}
   .nav{padding:0 10px;gap:8px;}
   .nav-logo{font-size:14px;letter-spacing:2px;}
-  .nav-stat,.nav-user,.btn-logout{display:none;}
+  .nav-stat{display:none;}
   .mobile-score{display:block;}
   .welcome{display:none;}
   #list-view{height:calc(100vh - 44px - 52px);overflow-y:auto;}
@@ -172,13 +162,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   #news-view{height:calc(100vh - 44px);}
 }
 
-/* ── Bottom nav ── */
 .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:52px;background:#282828;border-top:1px solid #3a3a3a;z-index:200;}
 .bn-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:none;background:transparent;color:#eff2f666;cursor:pointer;font-size:10px;letter-spacing:.5px;transition:color .15s;padding:4px 0;}
 .bn-tab.active{color:#ef4743;}
 .bn-tab svg{width:20px;height:20px;}
 
-/* ── Progress modal ── */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;align-items:flex-end;}
 .modal-sheet{background:#282828;border-top:1px solid #3a3a3a;border-radius:16px 16px 0 0;padding:20px 16px;width:100%;max-height:70vh;overflow-y:auto;}
 .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
@@ -196,24 +184,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .prog-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #2a2a2a;}
 .prog-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 .prog-name{font-size:13px;flex:1;}
-
-/* ── Profile modal (desktop) ── */
-.profile-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;align-items:center;justify-content:center;}
-.profile-card{background:#282828;border:1px solid #3a3a3a;border-radius:12px;padding:28px 24px;width:100%;max-width:360px;}
-.profile-avatar{width:64px;height:64px;border-radius:50%;background:#2a1a1a;border:2px solid #ef4743;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:22px;font-weight:900;color:#ef4743;margin:0 auto 16px;}
-.profile-username{font-size:18px;font-weight:600;color:#fff;text-align:center;margin-bottom:4px;}
-.profile-email{font-size:13px;color:#eff2f666;text-align:center;margin-bottom:20px;}
-.profile-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;}
-.ps-card{background:#1a1a1a;border-radius:8px;padding:10px;text-align:center;}
-.ps-num{font-size:20px;font-weight:700;}
-.ps-lbl{font-size:10px;color:#eff2f666;margin-top:2px;}
-.btn-logout-full{width:100%;padding:10px;border-radius:6px;border:1px solid #3a3a3a;background:transparent;color:#ef4743;font-size:14px;cursor:pointer;transition:background .15s;}
-.btn-logout-full:hover{background:#2a1a1a;}
 </style>
 </head>
 <body>
 
-<!-- Navbar -->
 <div class="nav">
   <div class="nav-logo">SKYNET</div>
   <div class="nav-sep"></div>
@@ -224,13 +198,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   <div class="nav-right">
     <div class="nav-stat">Solved <b id="nav-done">0</b>/<b id="nav-total">0</b></div>
     <div class="nav-stat">Saved <b id="nav-bk">0</b></div>
-    <div class="nav-user" id="nav-user" onclick="openProfile()" style="cursor:pointer"></div>
-    <button class="btn-logout" onclick="doLogout()">Logout</button>
     <span class="mobile-score" id="mobile-score">0/0</span>
   </div>
 </div>
 
-<!-- List view -->
 <div id="list-view">
   <div class="sidebar">
     <div class="filter-bar">
@@ -265,14 +236,13 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
       <tbody id="challenge-list"></tbody>
     </table>
   </div>
-  <div class="welcome" id="welcome-panel">
+  <div class="welcome">
     <div class="welcome-logo">SKYNET</div>
     <div class="welcome-sub">DATA INTELLIGENCE SYSTEM</div>
     <div class="welcome-hint">&#8592; Select a problem to begin</div>
   </div>
 </div>
 
-<!-- Editor view -->
 <div id="editor-view">
   <div class="split">
     <div class="left-panel">
@@ -323,7 +293,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   </div>
 </div>
 
-<!-- News view -->
 <div id="news-view">
   <div class="news-container">
     <div class="news-header">
@@ -334,7 +303,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   </div>
 </div>
 
-<!-- Bottom nav (mobile) -->
 <nav class="bottom-nav">
   <button class="bn-tab active" id="bn-problems" onclick="showView('list')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -352,13 +320,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     Progress
   </button>
-  <button class="bn-tab" id="bn-profile" onclick="openProfile()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-    Profile
-  </button>
 </nav>
 
-<!-- Progress modal -->
 <div class="modal-overlay" id="progress-modal" onclick="closeModal('progress-modal')">
   <div class="modal-sheet" onclick="event.stopPropagation()">
     <div class="modal-header">
@@ -379,36 +342,15 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   </div>
 </div>
 
-<!-- Profile modal -->
-<div class="profile-modal" id="profile-modal" onclick="closeModal('profile-modal')">
-  <div class="profile-card" onclick="event.stopPropagation()">
-    <div class="profile-avatar" id="p-avatar">R</div>
-    <div class="profile-username" id="p-username">—</div>
-    <div class="profile-email" id="p-email">—</div>
-    <div class="profile-stats">
-      <div class="ps-card"><div class="ps-num" style="color:#ef4743" id="p-total">0</div><div class="ps-lbl">Total</div></div>
-      <div class="ps-card"><div class="ps-num" style="color:#2cbb5d" id="p-done">0</div><div class="ps-lbl">Solved</div></div>
-      <div class="ps-card"><div class="ps-num" style="color:#ffb800" id="p-bk">0</div><div class="ps-lbl">Saved</div></div>
-    </div>
-    <button class="btn-logout-full" onclick="doLogout()">Sign Out</button>
-  </div>
-</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
 <script>
-let challenges=[], currentId=null, editor=null, currentUser=null;
+let challenges=[], currentId=null, editor=null;
 
 async function init(){
-  const [meRes, chRes] = await Promise.all([fetch("/api/me"), fetch("/api/challenges")]);
-  currentUser = await meRes.json();
-  challenges  = await chRes.json();
-  if(currentUser.logged_in){
-    document.getElementById("nav-user").textContent = "👤 "+currentUser.username;
-    document.getElementById("p-username").textContent = currentUser.username;
-    document.getElementById("p-avatar").textContent = currentUser.username[0].toUpperCase();
-  }
+  const res = await fetch("/api/challenges");
+  challenges = await res.json();
   updateNav(); renderList(); initEditor();
 }
 
@@ -451,46 +393,46 @@ function initEditor(){
 }
 
 function openChallenge(id){
-  currentId = id;
-  const c = challenges.find(x=>x.id===id);
+  currentId=id;
+  const c=challenges.find(x=>x.id===id);
   if(!c) return;
-  const isSQL = c.topic==="SQL";
-  editor.setOption("mode", isSQL?"text/x-sql":"python");
+  const isSQL=c.topic==="SQL";
+  editor.setOption("mode",isSQL?"text/x-sql":"python");
   editor.setValue(c.saved_code||c.starter_code||"");
   setTimeout(()=>editor.refresh(),50);
-  document.getElementById("lang-badge").textContent = isSQL?"SQL":"Python";
-  document.getElementById("lp-title").textContent   = c.title;
-  document.getElementById("desc-badges").innerHTML  = `
+  document.getElementById("lang-badge").textContent=isSQL?"SQL":"Python";
+  document.getElementById("lp-title").textContent=c.title;
+  document.getElementById("desc-badges").innerHTML=`
     <span class="badge b-${c.difficulty.toLowerCase()}">${c.difficulty}</span>
     <span class="badge b-topic" style="margin-left:4px">${c.topic}</span>`;
-  document.getElementById("desc-text").textContent  = c.description;
-  document.getElementById("schema-area").innerHTML  = isSQL?`
+  document.getElementById("desc-text").textContent=c.description;
+  document.getElementById("schema-area").innerHTML=isSQL?`
     <div class="schema-box">
 <span class="comment">-- Available tables</span>
 employees  (id, name, department, dept_id, salary, age)
 departments (id, dept_name, location)
-<span class="comment">-- Sample rows (employees)</span>
+<span class="comment">-- Sample rows</span>
 Alice | Engineering | 95000
 Bob   | Marketing   | 62000
 Eve   | Engineering | 102000</div>`:"";
-  document.getElementById("note-textarea").value      = c.note||"";
-  document.getElementById("note-saved").style.display = "none";
-  document.getElementById("hint-content").innerHTML   = "";
-  document.getElementById("hint-btn").textContent     = "💡 Get AI Hint";
-  document.getElementById("hint-btn").disabled        = false;
-  const bkBtn = document.getElementById("bk-btn");
-  bkBtn.textContent = c.bookmarked?"★ Saved":"☆ Save";
-  bkBtn.className   = "btn-bk"+(c.bookmarked?" on":"");
-  document.getElementById("output-body").textContent  = "// Run your code to see output here";
-  document.getElementById("output-body").className    = "output-body";
-  document.getElementById("run-status").innerHTML     = "";
+  document.getElementById("note-textarea").value=c.note||"";
+  document.getElementById("note-saved").style.display="none";
+  document.getElementById("hint-content").innerHTML="";
+  document.getElementById("hint-btn").textContent="💡 Get AI Hint";
+  document.getElementById("hint-btn").disabled=false;
+  const bkBtn=document.getElementById("bk-btn");
+  bkBtn.textContent=c.bookmarked?"★ Saved":"☆ Save";
+  bkBtn.className="btn-bk"+(c.bookmarked?" on":"");
+  document.getElementById("output-body").textContent="// Run your code to see output here";
+  document.getElementById("output-body").className="output-body";
+  document.getElementById("run-status").innerHTML="";
   lpTab("desc"); showView("editor"); renderList();
-  document.getElementById("bn-editor").style.display = "flex";
+  document.getElementById("bn-editor").style.display="flex";
 }
 
 function lpTab(name){
   ["desc","notes","hint"].forEach(t=>{
-    document.getElementById("lp-"+t).style.display = t===name?"":"none";
+    document.getElementById("lp-"+t).style.display=t===name?"":"none";
   });
   document.querySelectorAll(".lp-tab").forEach((b,i)=>{
     b.classList.toggle("active",["desc","notes","hint"][i]===name);
@@ -498,17 +440,17 @@ function lpTab(name){
 }
 
 async function runCode(){
-  const c = challenges.find(x=>x.id===currentId);
+  const c=challenges.find(x=>x.id===currentId);
   if(!c) return;
-  const code  = editor.getValue();
-  const isSQL = c.topic==="SQL";
-  const out   = document.getElementById("output-body");
-  const status= document.getElementById("run-status");
+  const code=editor.getValue();
+  const isSQL=c.topic==="SQL";
+  const out=document.getElementById("output-body");
+  const status=document.getElementById("run-status");
   out.className="output-body"; out.textContent="Running..."; status.innerHTML="";
-  const res  = await fetch(isSQL?"/api/sql":"/api/run",{
+  const res=await fetch(isSQL?"/api/sql":"/api/run",{
     method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})
   });
-  const data = await res.json();
+  const data=await res.json();
   if(data.error){
     out.className="output-body err"; out.textContent=data.error;
     status.innerHTML='<span class="result-fail">✗ Error</span>';
@@ -527,53 +469,53 @@ function buildTable(cols,rows){
 }
 
 async function submitCode(){
-  const code = editor.getValue();
+  const code=editor.getValue();
   await fetch(`/api/challenges/${currentId}/solution`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
   await fetch(`/api/challenges/${currentId}/done`,{method:"POST"});
-  challenges = challenges.map(c=>c.id===currentId?{...c,done:1,saved_code:code}:c);
+  challenges=challenges.map(c=>c.id===currentId?{...c,done:1,saved_code:code}:c);
   updateNav(); renderList();
   document.getElementById("run-status").innerHTML='<span class="result-pass">✓ Submitted!</span>';
 }
 
 async function toggleBookmark(){
-  const res  = await fetch(`/api/challenges/${currentId}/bookmark`,{method:"POST"});
-  const data = await res.json();
-  challenges = challenges.map(c=>c.id===currentId?{...c,bookmarked:data.bookmarked?1:0}:c);
-  const btn  = document.getElementById("bk-btn");
-  btn.textContent = data.bookmarked?"★ Saved":"☆ Save";
-  btn.className   = "btn-bk"+(data.bookmarked?" on":"");
+  const res=await fetch(`/api/challenges/${currentId}/bookmark`,{method:"POST"});
+  const data=await res.json();
+  challenges=challenges.map(c=>c.id===currentId?{...c,bookmarked:data.bookmarked?1:0}:c);
+  const btn=document.getElementById("bk-btn");
+  btn.textContent=data.bookmarked?"★ Saved":"☆ Save";
+  btn.className="btn-bk"+(data.bookmarked?" on":"");
   updateNav(); renderList();
 }
 
 async function saveNote(){
-  const content = document.getElementById("note-textarea").value;
+  const content=document.getElementById("note-textarea").value;
   await fetch(`/api/challenges/${currentId}/note`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content})});
-  challenges = challenges.map(c=>c.id===currentId?{...c,note:content}:c);
-  const s = document.getElementById("note-saved");
+  challenges=challenges.map(c=>c.id===currentId?{...c,note:content}:c);
+  const s=document.getElementById("note-saved");
   s.style.display="block"; setTimeout(()=>s.style.display="none",2000);
 }
 
 async function fetchHint(){
-  const btn  = document.getElementById("hint-btn");
-  const area = document.getElementById("hint-content");
+  const btn=document.getElementById("hint-btn");
+  const area=document.getElementById("hint-content");
   btn.textContent="Loading..."; btn.disabled=true;
   area.innerHTML='<div style="font-size:13px;color:#eff2f644;margin-top:10px">Fetching hint...</div>';
-  const res  = await fetch(`/api/hint/${currentId}`);
-  const data = await res.json();
+  const res=await fetch(`/api/hint/${currentId}`);
+  const data=await res.json();
   btn.textContent="💡 Get AI Hint"; btn.disabled=false;
-  area.innerHTML = data.error
+  area.innerHTML=data.error
     ?`<div style="color:#ef4743;font-size:13px;margin-top:10px">${data.error}</div>`
     :`<div class="hint-box">${data.hint}</div><div class="hint-source">Source: ${data.source==='ai'?'AI (HuggingFace)':data.source==='cache'?'Cached':'Built-in'}</div>`;
 }
 
 async function loadNews(){
-  const list = document.getElementById("news-list");
+  const list=document.getElementById("news-list");
   list.innerHTML='<div class="empty">Syncing feed...</div>';
-  const res  = await fetch("/api/news");
-  const data = await res.json();
+  const res=await fetch("/api/news");
+  const data=await res.json();
   if(data.error){list.innerHTML=`<div style="color:#ef4743;padding:1rem;font-size:13px">${data.error}</div>`;return;}
-  const tagClass={"AI News":"tag-ai","Tools":"tag-tools","Research":"tag-research","Industry":"tag-research"};
-  list.innerHTML = data.map(n=>`
+  const tagClass={"AI News":"tag-ai","Tools":"tag-tools","Research":"tag-research"};
+  list.innerHTML=data.map(n=>`
     <div class="news-card">
       <div class="nc-row">
         <div style="flex:1">
@@ -587,15 +529,15 @@ async function loadNews(){
 }
 
 function openProgress(){
-  const done = challenges.filter(c=>c.done).length;
-  const bk   = challenges.filter(c=>c.bookmarked).length;
-  const pct  = challenges.length?Math.round(done/challenges.length*100):0;
-  document.getElementById("m-total").textContent = challenges.length;
-  document.getElementById("m-done").textContent  = done;
-  document.getElementById("m-bk").textContent    = bk;
-  document.getElementById("m-bar").style.width   = pct+"%";
-  document.getElementById("m-pct").textContent   = pct+"% complete";
-  document.getElementById("m-list").innerHTML    = challenges.map(c=>`
+  const done=challenges.filter(c=>c.done).length;
+  const bk  =challenges.filter(c=>c.bookmarked).length;
+  const pct =challenges.length?Math.round(done/challenges.length*100):0;
+  document.getElementById("m-total").textContent=challenges.length;
+  document.getElementById("m-done").textContent=done;
+  document.getElementById("m-bk").textContent=bk;
+  document.getElementById("m-bar").style.width=pct+"%";
+  document.getElementById("m-pct").textContent=pct+"% complete";
+  document.getElementById("m-list").innerHTML=challenges.map(c=>`
     <div class="prog-item">
       <div class="prog-dot" style="background:${c.done?'#2cbb5d':'#2a2a2a'}"></div>
       <span class="prog-name" style="color:${c.done?'#eff2f699':'#eff2f644'}">${c.title}</span>
@@ -604,33 +546,14 @@ function openProgress(){
   document.getElementById("progress-modal").style.display="flex";
 }
 
-function openProfile(){
-  const done = challenges.filter(c=>c.done).length;
-  const bk   = challenges.filter(c=>c.bookmarked).length;
-  document.getElementById("p-total").textContent = challenges.length;
-  document.getElementById("p-done").textContent  = done;
-  document.getElementById("p-bk").textContent    = bk;
-  if(currentUser){
-    document.getElementById("p-username").textContent = currentUser.username||"—";
-    document.getElementById("p-email").textContent    = currentUser.email||"";
-    document.getElementById("p-avatar").textContent   = (currentUser.username||"?")[0].toUpperCase();
-  }
-  document.getElementById("profile-modal").style.display="flex";
-}
-
 function closeModal(id){
   document.getElementById(id).style.display="none";
 }
 
-async function doLogout(){
-  await fetch("/api/logout",{method:"POST"});
-  window.location.href="/login";
-}
-
 function showView(name){
-  document.getElementById("list-view").style.display   = name==="list"  ?"flex":"none";
-  document.getElementById("editor-view").style.display = name==="editor"?"block":"none";
-  document.getElementById("news-view").style.display   = name==="news"  ?"block":"none";
+  document.getElementById("list-view").style.display  =name==="list"  ?"flex":"none";
+  document.getElementById("editor-view").style.display=name==="editor"?"block":"none";
+  document.getElementById("news-view").style.display  =name==="news"  ?"block":"none";
   document.querySelectorAll(".nav-tab").forEach((t,i)=>{
     t.classList.toggle("active",(i===0&&name!=="news")||(i===1&&name==="news"));
   });

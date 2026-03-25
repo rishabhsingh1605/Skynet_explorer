@@ -4,7 +4,6 @@ import sqlite3
 import json
 import urllib.request
 import urllib.parse
-import urllib.error
 import xml.etree.ElementTree as ET
 import sys
 import io
@@ -16,7 +15,7 @@ load_dotenv()
 app = Flask(__name__)
 DB = "database.db"
 
-# ── Database setup ────────────────────────────────────────────────
+# ── Database ───────────────────────────────────────────────────────
 def get_db():
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
@@ -50,8 +49,6 @@ def init_db():
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             challenge_id INTEGER UNIQUE,
             code         TEXT,
-            done         INTEGER DEFAULT 0,
-            bookmarked   INTEGER DEFAULT 0,
             updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS hint_cache (
@@ -142,10 +139,7 @@ def health():
 def get_challenges():
     conn = get_db()
     rows = conn.execute("""
-        SELECT c.*, n.content as note, s.code as saved_code,
-               COALESCE(s.done,0) as done,
-               COALESCE(s.bookmarked,0) as bookmarked,
-               h.content as cached_hint
+        SELECT c.*, n.content as note, s.code as saved_code, h.content as cached_hint
         FROM challenges c
         LEFT JOIN notes n ON c.id = n.challenge_id
         LEFT JOIN user_solutions s ON c.id = s.challenge_id
@@ -157,31 +151,25 @@ def get_challenges():
 @app.route("/api/challenges/<int:cid>/done", methods=["POST"])
 def toggle_done(cid):
     conn = get_db()
-    conn.execute("""
-        INSERT INTO user_solutions(challenge_id, done) VALUES(?,1)
-        ON CONFLICT(challenge_id) DO UPDATE SET done = NOT done
-    """, (cid,))
+    conn.execute("UPDATE challenges SET done = NOT done WHERE id=?", (cid,))
     conn.commit()
-    row = conn.execute("SELECT done FROM user_solutions WHERE challenge_id=?", (cid,)).fetchone()
+    row = conn.execute("SELECT done FROM challenges WHERE id=?", (cid,)).fetchone()
     conn.close()
-    return jsonify({"done": bool(row["done"]) if row else False})
+    return jsonify({"done": bool(row["done"])})
 
 @app.route("/api/challenges/<int:cid>/bookmark", methods=["POST"])
 def toggle_bookmark(cid):
     conn = get_db()
-    conn.execute("""
-        INSERT INTO user_solutions(challenge_id, bookmarked) VALUES(?,1)
-        ON CONFLICT(challenge_id) DO UPDATE SET bookmarked = NOT bookmarked
-    """, (cid,))
+    conn.execute("UPDATE challenges SET bookmarked = NOT bookmarked WHERE id=?", (cid,))
     conn.commit()
-    row = conn.execute("SELECT bookmarked FROM user_solutions WHERE challenge_id=?", (cid,)).fetchone()
+    row = conn.execute("SELECT bookmarked FROM challenges WHERE id=?", (cid,)).fetchone()
     conn.close()
-    return jsonify({"bookmarked": bool(row["bookmarked"]) if row else False})
+    return jsonify({"bookmarked": bool(row["bookmarked"])})
 
 @app.route("/api/challenges/<int:cid>/note", methods=["POST"])
 def save_note(cid):
     content = request.json.get("content", "")
-    conn    = get_db()
+    conn = get_db()
     conn.execute("""
         INSERT INTO notes(challenge_id, content) VALUES(?,?)
         ON CONFLICT(challenge_id) DO UPDATE SET content=excluded.content, updated_at=CURRENT_TIMESTAMP
@@ -195,8 +183,8 @@ def save_solution(cid):
     code = request.json.get("code", "")
     conn = get_db()
     conn.execute("""
-        INSERT INTO user_solutions(challenge_id, code, done) VALUES(?,?,1)
-        ON CONFLICT(challenge_id) DO UPDATE SET code=excluded.code, done=1, updated_at=CURRENT_TIMESTAMP
+        INSERT INTO user_solutions(challenge_id, code) VALUES(?,?)
+        ON CONFLICT(challenge_id) DO UPDATE SET code=excluded.code, updated_at=CURRENT_TIMESTAMP
     """, (cid, code))
     conn.commit()
     conn.close()
@@ -235,7 +223,7 @@ def run_sql():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-# ── Built-in hints ─────────────────────────────────────────────────
+# ── Hints ──────────────────────────────────────────────────────────
 def builtin_hint(ch):
     hints = {
         "Data Wrangling": [
@@ -250,3 +238,129 @@ def builtin_hint(ch):
         ],
         "SQL": [
             "Use WHERE to filter rows — it runs before GROUP BY.",
+            "Use HAVING to filter groups after GROUP BY.",
+            "Use JOIN ... ON table1.id = table2.fk_id to connect tables.",
+        ]
+    }
+    topic_hints = hints.get(ch["topic"], [
+        "Break the problem into smaller steps.",
+        "Print intermediate results to debug.",
+        "Re-read the description carefully.",
+    ])
+    return "\n".join(f"• {h}" for h in topic_hints)
+
+@app.route("/api/hint/<int:cid>")
+def get_hint(cid):
+    conn   = get_db()
+    ch     = conn.execute("SELECT * FROM challenges WHERE id=?", (cid,)).fetchone()
+    cached = conn.execute("SELECT content FROM hint_cache WHERE challenge_id=?", (cid,)).fetchone()
+    conn.close()
+    if cached:
+        return jsonify({"hint": cached["content"], "source": "cache"})
+    key = os.getenv("HF_API_KEY")
+    if key:
+        try:
+            prompt = (
+                f"I am a beginner in Data Science working on this challenge:\n"
+                f"Title: {ch['title']}\nDescription: {ch['description']}\n\n"
+                f"Give me exactly 3 short beginner-friendly hints (not the full solution). "
+                f"Format as bullet points starting with •. Be concise."
+            )
+            data = json.dumps({
+                "inputs": prompt,
+                "parameters": {"max_new_tokens": 250, "temperature": 0.5, "return_full_text": False}
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+                data=data,
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                result = json.loads(resp.read().decode())
+            if isinstance(result, list) and result:
+                hint_text = result[0].get("generated_text", "").strip()
+                if hint_text:
+                    conn = get_db()
+                    conn.execute("""
+                        INSERT INTO hint_cache(challenge_id, content) VALUES(?,?)
+                        ON CONFLICT(challenge_id) DO UPDATE SET content=excluded.content
+                    """, (cid, hint_text))
+                    conn.commit()
+                    conn.close()
+                    return jsonify({"hint": hint_text, "source": "ai"})
+        except Exception as e:
+            print(f"HuggingFace hint failed: {e}")
+    hint_text = builtin_hint(ch)
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO hint_cache(challenge_id, content) VALUES(?,?)
+        ON CONFLICT(challenge_id) DO UPDATE SET content=excluded.content
+    """, (cid, hint_text))
+    conn.commit()
+    conn.close()
+    return jsonify({"hint": hint_text, "source": "builtin"})
+
+# ── News ───────────────────────────────────────────────────────────
+@app.route("/api/news")
+def get_news():
+    sources = [
+        "https://export.arxiv.org/rss/cs.LG",
+        "https://export.arxiv.org/rss/cs.AI",
+    ]
+    for source_url in sources:
+        try:
+            req = urllib.request.Request(
+                source_url,
+                headers={"User-Agent": "Mozilla/5.0 Chrome/120.0.0.0", "Accept": "*/*"}
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                xml_data = resp.read().decode("utf-8", errors="ignore")
+            root  = ET.fromstring(xml_data)
+            items = root.findall(".//item")
+            news  = []
+            for item in items[:8]:
+                title_el   = item.find("title")
+                link_el    = item.find("link")
+                desc_el    = item.find("description")
+                pubdate_el = item.find("pubDate")
+                if title_el is None: continue
+                title   = title_el.text.strip() if title_el.text else "No title"
+                link    = link_el.text.strip() if link_el is not None and link_el.text else ""
+                summary = re.sub(r'<[^>]+>', '', desc_el.text).strip()[:200]+"..." if desc_el is not None and desc_el.text else ""
+                date    = pubdate_el.text[:16] if pubdate_el is not None and pubdate_el.text else ""
+                tl = title.lower()
+                tag = "AI News" if any(w in tl for w in ["language model","llm","gpt","transformer","generative","neural"]) \
+                    else "Tools" if any(w in tl for w in ["efficient","framework","tool","library","system"]) \
+                    else "Research"
+                news.append({"title":title,"summary":summary,"tag":tag,"date":date,"link":link})
+            if news:
+                conn = get_db()
+                conn.execute("DELETE FROM news_cache")
+                conn.execute("INSERT INTO news_cache(content) VALUES(?)", (json.dumps(news),))
+                conn.commit()
+                conn.close()
+                return jsonify(news)
+        except Exception as e:
+            print(f"RSS source failed: {e}")
+            continue
+    try:
+        conn = get_db()
+        cached = conn.execute("SELECT content FROM news_cache ORDER BY fetched_at DESC LIMIT 1").fetchone()
+        conn.close()
+        if cached: return jsonify(json.loads(cached["content"]))
+    except Exception:
+        pass
+    return jsonify([
+        {"title":"Attention Is All You Need","summary":"The seminal paper introducing the Transformer model.","tag":"Research","date":"2017-06-12","link":"https://arxiv.org/abs/1706.03762"},
+        {"title":"BERT: Pre-training of Deep Bidirectional Transformers","summary":"Google's BERT model for language understanding.","tag":"AI News","date":"2018-10-11","link":"https://arxiv.org/abs/1810.04805"},
+        {"title":"XGBoost: A Scalable Tree Boosting System","summary":"Highly efficient gradient boosting framework.","tag":"Tools","date":"2016-03-09","link":"https://arxiv.org/abs/1603.02754"},
+        {"title":"Random Forests","summary":"Breiman's algorithm combining multiple decision trees.","tag":"Research","date":"2001-10-01","link":"https://arxiv.org/abs/1106.0257"},
+        {"title":"Deep Residual Learning for Image Recognition","summary":"ResNet paper introducing skip connections.","tag":"AI News","date":"2015-12-10","link":"https://arxiv.org/abs/1512.03385"},
+        {"title":"A Survey on Transfer Learning","summary":"Comprehensive survey covering transfer learning methods.","tag":"Research","date":"2019-08-01","link":"https://arxiv.org/abs/1911.02685"},
+    ])
+
+
+if __name__ == "__main__":
+    init_db()
+    print("\nApp running at http://127.0.0.1:5000\n")
+    app.run(debug=True)
